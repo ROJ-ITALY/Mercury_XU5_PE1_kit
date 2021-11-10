@@ -1,5 +1,5 @@
 # Add patch to get PV drivers working, including PV network
-# Enable DEBUG HYPERCALL in config file
+# Enable DEBUG HYPERCALL and COLORING in config file
 
 FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}:"
 
