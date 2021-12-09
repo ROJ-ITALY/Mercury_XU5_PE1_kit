@@ -1652,10 +1652,10 @@ CONFIG_run-postinsts=y
 #
 # libmetal 
 #
-# CONFIG_libmetal is not set
+CONFIG_libmetal=y
 # CONFIG_libmetal-dev is not set
 # CONFIG_libmetal-dbg is not set
-# CONFIG_libmetal-demos is not set
+CONFIG_libmetal-demos=y
 
 #
 # libmpc 
@@ -3236,7 +3236,7 @@ CONFIG_packagegroup-core-boot=y
 # sysfsutils 
 #
 # CONFIG_sysfsutils is not set
-# CONFIG_libsysfs is not set
+CONFIG_libsysfs=y
 # CONFIG_sysfsutils-dbg is not set
 # CONFIG_sysfsutils-dev is not set
 
