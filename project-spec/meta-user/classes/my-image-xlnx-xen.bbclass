@@ -1,6 +1,13 @@
 inherit image-xlnx-xen
 
-XEN_CMD ?= "console=dtuart dtuart=serial0 dom0_mem=1024M dom0_max_vcpus=1 bootscrub=0 vwfi=native sched=null xen_colors=0-0 dom0_colors=1-9"
+XEN_CMD_DEFAULT ?= "console=dtuart dtuart=serial0 dom0_mem=1024M dom0_max_vcpus=1 bootscrub=0 vwfi=native sched=null xen_colors=0-0 dom0_colors=1-9"
+XEN_CMD_NO_SERIAL0 ?= "dom0_mem=1024M dom0_max_vcpus=1 bootscrub=0 vwfi=native sched=null xen_colors=0-0 dom0_colors=1-9"
+
+XEN_CMD = "${@ '${XEN_CMD_NO_SERIAL0}' if d.getVar('XEN_DOMU_BAREMETAL') == '1' else '${XEN_CMD_DEFAULT}' }"
+
+# Set device nodes in passthrough only for DomU baremetal demos. IT SEEMS NOT SUPPORTED IN OUR CURRENT VERSION!
+#XEN_PASSTHROUGH_PATHS_DEMOS ?= "/amba/serial@ff000000 /amba/shm@0 /amba/ipi@0 /amba/timer@ff110000"
+#XEN_PASSTHROUGH_PATHS = "${@ '${XEN_PASSTHROUGH_PATHS_DEMOS}' if d.getVar('XEN_DOMU_BAREMETAL') == '1' else '' }"
 
 plnx_config_image_builder() {
 	cp "${DEPLOY_DIR_IMAGE}/${INITRAMFS_IMAGE}-${MACHINE}.cpio.gz" "${WORKDIR}/image_builder/rootfs.cpio.gz"
