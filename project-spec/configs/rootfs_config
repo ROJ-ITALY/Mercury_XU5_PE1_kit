@@ -4240,6 +4240,7 @@ CONFIG_imagefeature-debug-tweaks=y
 # apps 
 #
 # CONFIG_gpio-demo is not set
+CONFIG_libmetal-custom-demos=y
 # CONFIG_peekpoke is not set
 
 #

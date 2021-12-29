@@ -6,3 +6,4 @@ CONFIG_peekpoke
 CONFIG_iperf3
 CONFIG_memtester
 CONFIG_phytool
+CONFIG_libmetal-custom-demos
