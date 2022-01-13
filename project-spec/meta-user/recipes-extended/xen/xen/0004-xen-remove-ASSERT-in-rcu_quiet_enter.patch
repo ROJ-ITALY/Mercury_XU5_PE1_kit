@@ -1,0 +1,31 @@
+From 64f2a4d71c3c325a3cc982b4f0cda874b42b778d Mon Sep 17 00:00:00 2001
+From: Stefano Stabellini <stefano.stabellini@xilinx.com>
+Date: Thu, 6 Jan 2022 17:41:08 -0800
+Subject: [PATCH-2020.2 4/4] xen: remove ASSERT in rcu_quiet_enter
+
+After the recent changes to the RCU subsystem and rcu_quiet_enter, the
+ASSERT at the beginning of rcu_quiet_enter triggers. It is harmless, so
+remove it.
+
+Signed-off-by: Stefano Stabellini <stefano.stabellini@xilinx.com>
+---
+ xen/common/rcupdate.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/xen/common/rcupdate.c b/xen/common/rcupdate.c
+index 370406384b..c10a45ddeb 100644
+--- a/xen/common/rcupdate.c
++++ b/xen/common/rcupdate.c
+@@ -657,7 +657,8 @@ void rcu_quiet_enter(void)
+ {
+     unsigned int cpu = smp_processor_id();
+ 
+-    ASSERT(!cpumask_test_cpu(cpu, &rcu_ctrlblk.ignore_cpumask));
++    if (cpumask_test_cpu(cpu, &rcu_ctrlblk.ignore_cpumask))
++        return;
+     cpumask_set_cpu(cpu, &rcu_ctrlblk.ignore_cpumask);
+     /*
+      * If some other CPU is starting a new grace period, we'll notice that
+-- 
+2.25.1
+

@@ -1,0 +1,72 @@
+From 42f665ede47efc9fd271697ae22eba9e88914d40 Mon Sep 17 00:00:00 2001
+From: Dario Faggioli <dfaggioli@suse.com>
+Date: Thu, 6 Jan 2022 16:54:18 -0800
+Subject: [PATCH-2020.2 1/4] xen: RCU: bootparam to force quiescence at every
+ call.
+
+Signed-off-by: Dario Faggioli <dfaggioli@suse.com>
+---
+ xen/arch/arm/traps.c       |  3 +++
+ xen/common/rcupdate.c      | 10 ++++++++++
+ xen/include/xen/rcupdate.h |  2 ++
+ 3 files changed, 15 insertions(+)
+
+diff --git a/xen/arch/arm/traps.c b/xen/arch/arm/traps.c
+index d028ec9224..ec98ca01be 100644
+--- a/xen/arch/arm/traps.c
++++ b/xen/arch/arm/traps.c
+@@ -86,7 +86,10 @@ static enum {
+ static int __init parse_vwfi(const char *s)
+ {
+ 	if ( !strcmp(s, "native") )
++	{
++		rcu_always_quiesc = true;
+ 		vwfi = NATIVE;
++	}
+ 	else
+ 		vwfi = TRAP;
+ 
+diff --git a/xen/common/rcupdate.c b/xen/common/rcupdate.c
+index a56103c6f7..77e6008266 100644
+--- a/xen/common/rcupdate.c
++++ b/xen/common/rcupdate.c
+@@ -90,6 +90,9 @@ struct rcu_data {
+     bool idle_timer_active;
+ };
+ 
++bool rcu_always_quiesc = false;
++boolean_param("rcu_force_quiesc", rcu_always_quiesc);
++
+ /*
+  * If a CPU with RCU callbacks queued goes idle, when the grace period is
+  * not finished yet, how can we make sure that the callbacks will eventually
+@@ -562,6 +565,13 @@ static void rcu_init_percpu_data(int cpu, struct rcu_ctrlblk *rcp,
+     rdp->quiescbatch = rcp->completed;
+     rdp->qs_pending = 0;
+     rdp->cpu = cpu;
++    if ( rcu_always_quiesc )
++    {
++        blimit = INT_MAX;
++        qhimark = 0;
++        qlowmark = 0;
++        //rsinterval = 0;
++    }
+     rdp->blimit = blimit;
+     init_timer(&rdp->idle_timer, rcu_idle_timer_handler, rdp, cpu);
+ }
+diff --git a/xen/include/xen/rcupdate.h b/xen/include/xen/rcupdate.h
+index 13850865ed..6dc33e4448 100644
+--- a/xen/include/xen/rcupdate.h
++++ b/xen/include/xen/rcupdate.h
+@@ -55,6 +55,8 @@ struct rcu_head {
+ } while (0)
+ 
+ 
++extern bool rcu_always_quiesc;
++
+ int rcu_pending(int cpu);
+ int rcu_needs_cpu(int cpu);
+ 
+-- 
+2.25.1
+

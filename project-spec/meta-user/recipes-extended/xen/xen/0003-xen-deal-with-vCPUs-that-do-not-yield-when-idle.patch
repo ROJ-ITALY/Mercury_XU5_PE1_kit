@@ -1,0 +1,327 @@
+From 1acbe910ee0a0194c9aa281885ee2ff3cb98d60b Mon Sep 17 00:00:00 2001
+From: Dario Faggioli <dfaggioli@suse.com>
+Date: Thu, 6 Jan 2022 17:26:48 -0800
+Subject: [PATCH-2020.2 3/4] xen: deal with vCPUs that do not yield when idle
+
+Our RCU implementation needs that a CPU goes through Xen, from time to
+time, e.g., for a context switch, to properly mark the end of grace
+period. This usually happen often enough, and CPUs that go idle and stay
+like that for a while are handled specially (so that they are recorded
+as quiescent and "leave" the grace period before starting idling).
+
+In principle, even a CPU that starts executing guest code may/should be
+marked as quiescent (it certainly can't be in the middle of a read side
+RCU critical section if it's leaving Xen and entering the guest!). This
+isn't done and in general does not cause problems. However, if the NULL
+scheduler is used and the guest is configured to not go back in Xen when
+its vCPUs become idle (e.g., with "vwfi=native" on ARM) grace periods
+may extend for very long time and RCU callback delayed to a point that,
+for instance, a domain is not properly destroyed.
+
+To fix that, we must start marking a CPU as quiescent as soon as it
+enter the guest (and, vice versa, register it back to the current grace
+period when it enters Xen). In order to do that, some changes to the API
+of rcu_idle_enter/exit were necessary (and the functions were renamed
+too).
+
+Note that, exactly like in the case where the CPU goes idle, we need the
+arm the callback timer when we enter guest context. In fact, if a CPU
+enter a guest with an RCU callback queued and then stays in that context
+for long enough, we still risk to not execute the callback itself for
+long enough to have problems.
+
+XXX ARM only for now.
+
+Signed-off-by: Dario Faggioli <dfaggioli@suse.com>
+---
+ xen/arch/arm/domain.c         |  6 ++---
+ xen/arch/arm/traps.c          |  3 +++
+ xen/arch/x86/acpi/cpu_idle.c  | 10 ++++-----
+ xen/arch/x86/cpu/mwait-idle.c |  8 +++----
+ xen/common/rcupdate.c         | 42 +++++++++++++++++++++++------------
+ xen/common/schedule.c         | 12 ----------
+ xen/include/xen/rcupdate.h    |  4 ++--
+ xen/include/xen/sched.h       |  2 --
+ 8 files changed, 45 insertions(+), 42 deletions(-)
+
+diff --git a/xen/arch/arm/domain.c b/xen/arch/arm/domain.c
+index 351687e95c..569cd3269d 100644
+--- a/xen/arch/arm/domain.c
++++ b/xen/arch/arm/domain.c
+@@ -47,8 +47,8 @@ static void do_idle(void)
+ {
+     unsigned int cpu = smp_processor_id();
+ 
+-    sched_tick_suspend();
+-    /* sched_tick_suspend() can raise TIMER_SOFTIRQ. Process it now. */
++    rcu_quiet_enter();
++    /* rcu_idle_enter() can raise TIMER_SOFTIRQ. Process it now. */
+     process_pending_softirqs();
+ 
+     local_irq_disable();
+@@ -59,7 +59,7 @@ static void do_idle(void)
+     }
+     local_irq_enable();
+ 
+-    sched_tick_resume();
++    rcu_quiet_exit();
+ }
+ 
+ void idle_loop(void)
+diff --git a/xen/arch/arm/traps.c b/xen/arch/arm/traps.c
+index ec98ca01be..ee4404c4ef 100644
+--- a/xen/arch/arm/traps.c
++++ b/xen/arch/arm/traps.c
+@@ -2011,6 +2011,8 @@ void enter_hypervisor_from_guest(void)
+ {
+     struct vcpu *v = current;
+ 
++    rcu_quiet_exit();
++
+     /*
+      * If we pended a virtual abort, preserve it until it gets cleared.
+      * See ARM ARM DDI 0487A.j D1.14.3 (Virtual Interrupts) for details,
+@@ -2273,6 +2275,7 @@ static void check_for_vcpu_work(void)
+  */
+ void leave_hypervisor_to_guest(void)
+ {
++    rcu_quiet_enter();
+     local_irq_disable();
+ 
+     check_for_vcpu_work();
+diff --git a/xen/arch/x86/acpi/cpu_idle.c b/xen/arch/x86/acpi/cpu_idle.c
+index 836f524ef4..a71b20bbf0 100644
+--- a/xen/arch/x86/acpi/cpu_idle.c
++++ b/xen/arch/x86/acpi/cpu_idle.c
+@@ -646,8 +646,8 @@ static void acpi_processor_idle(void)
+ 
+     cpufreq_dbs_timer_suspend();
+ 
+-    sched_tick_suspend();
+-    /* sched_tick_suspend() can raise TIMER_SOFTIRQ. Process it now. */
++    rcu_quiet_enter();
++    /* rcu_idle_enter() can raise TIMER_SOFTIRQ. Process it now. */
+     process_pending_softirqs();
+ 
+     /*
+@@ -659,7 +659,7 @@ static void acpi_processor_idle(void)
+     if ( !cpu_is_haltable(smp_processor_id()) )
+     {
+         local_irq_enable();
+-        sched_tick_resume();
++        rcu_quiet_exit();
+         cpufreq_dbs_timer_resume();
+         return;
+     }
+@@ -784,7 +784,7 @@ static void acpi_processor_idle(void)
+         /* Now in C0 */
+         power->last_state = &power->states[0];
+         local_irq_enable();
+-        sched_tick_resume();
++        rcu_quiet_exit();
+         cpufreq_dbs_timer_resume();
+         return;
+     }
+@@ -792,7 +792,7 @@ static void acpi_processor_idle(void)
+     /* Now in C0 */
+     power->last_state = &power->states[0];
+ 
+-    sched_tick_resume();
++    rcu_quiet_exit();
+     cpufreq_dbs_timer_resume();
+ 
+     if ( cpuidle_current_governor->reflect )
+diff --git a/xen/arch/x86/cpu/mwait-idle.c b/xen/arch/x86/cpu/mwait-idle.c
+index 52413e6da1..33f2174b93 100644
+--- a/xen/arch/x86/cpu/mwait-idle.c
++++ b/xen/arch/x86/cpu/mwait-idle.c
+@@ -755,8 +755,8 @@ static void mwait_idle(void)
+ 
+ 	cpufreq_dbs_timer_suspend();
+ 
+-	sched_tick_suspend();
+-	/* sched_tick_suspend() can raise TIMER_SOFTIRQ. Process it now. */
++	rcu_quiet_enter();
++	/* rcu_quiet_enter() can raise TIMER_SOFTIRQ. Process it now. */
+ 	process_pending_softirqs();
+ 
+ 	/* Interrupts must be disabled for C2 and higher transitions. */
+@@ -764,7 +764,7 @@ static void mwait_idle(void)
+ 
+ 	if (!cpu_is_haltable(cpu)) {
+ 		local_irq_enable();
+-		sched_tick_resume();
++		rcu_quiet_exit();
+ 		cpufreq_dbs_timer_resume();
+ 		return;
+ 	}
+@@ -806,7 +806,7 @@ static void mwait_idle(void)
+ 	if (!(lapic_timer_reliable_states & (1 << cstate)))
+ 		lapic_timer_on();
+ 
+-	sched_tick_resume();
++	rcu_quiet_exit();
+ 	cpufreq_dbs_timer_resume();
+ 
+ 	if ( cpuidle_current_governor->reflect )
+diff --git a/xen/common/rcupdate.c b/xen/common/rcupdate.c
+index 898fef0455..370406384b 100644
+--- a/xen/common/rcupdate.c
++++ b/xen/common/rcupdate.c
+@@ -85,7 +85,7 @@ struct rcu_data {
+     struct rcu_head barrier;
+     long            last_rs_qlen;     /* qlen during the last resched */
+ 
+-    /* 3) idle CPUs handling */
++    /* 3) idle (or in guest mode) CPUs handling */
+     struct timer cb_timer;
+     bool cb_timer_active;
+ };
+@@ -110,6 +110,12 @@ boolean_param("rcu_force_quiesc", rcu_always_quiesc);
+  * 3) it is stopped immediately, if the CPU wakes up from idle and
+  *    resumes 'normal' execution.
+  *
++ * Note also that the same happens if a CPU starts executing a guest that
++ * (almost) never comes back into the hypervisor. This may be the case if
++ * the guest uses "idle=poll" / "vwfi=native". Therefore, we need to handle
++ * guest entry events in the same way as the CPU going idle, i.e., consider
++ * it quiesced and arm the timer.
++ *
+  * About how far in the future the timer should be programmed each time,
+  * it's hard to tell (guess!!). Since this mimics Linux's periodic timer
+  * tick, take values used there as an indication. In Linux 2.6.21, tick
+@@ -303,9 +309,10 @@ static void rcu_start_batch(struct rcu_ctrlblk *rcp)
+         * Make sure the increment of rcp->cur is visible so, even if a
+         * CPU that is about to go idle, is captured inside rcp->cpumask,
+         * rcu_pending() will return false, which then means cpu_quiet()
+-        * will be invoked, before the CPU would actually enter idle.
++        * will be invoked, before the CPU would actually enter idle (or
++        * enter a guest).
+         *
+-        * This barrier is paired with the one in rcu_idle_enter().
++        * This barrier is paired with the one in rcu_quit_enter().
+         */
+         smp_mb();
+         cpumask_andnot(&rcp->cpumask, &cpu_online_map, &rcp->ignore_cpumask);
+@@ -462,14 +469,15 @@ int rcu_needs_cpu(int cpu)
+  * periodically poke rcu_pedning(), so that it will invoke the callback
+  * not too late after the end of the grace period.
+  */
+-void cb_timer_start(void)
++void cb_timer_start(unsigned int cpu)
+ {
+-    struct rcu_data *rdp = &this_cpu(rcu_data);
++    struct rcu_data *rdp = &per_cpu(rcu_data, cpu);
+ 
+     /*
+      * Note that we don't check rcu_pending() here. In fact, we don't want
+      * the timer armed on CPUs that are in the process of quiescing while
+-     * going idle, unless they really are the ones with a queued callback.
++     * going idle or entering guest mode, unless they really have queued
++     * callbacks.
+      */
+     if (likely(!rdp->curlist))
+         return;
+@@ -478,9 +486,9 @@ void cb_timer_start(void)
+     rdp->cb_timer_active = true;
+ }
+ 
+-void cb_timer_stop(void)
++void cb_timer_stop(unsigned int cpu)
+ {
+-    struct rcu_data *rdp = &this_cpu(rcu_data);
++    struct rcu_data *rdp = &per_cpu(rcu_data, cpu);
+ 
+     if (likely(!rdp->cb_timer_active))
+         return;
+@@ -641,11 +649,14 @@ void __init rcu_init(void)
+ }
+ 
+ /*
+- * The CPU is becoming idle, so no more read side critical
+- * sections, and one more step toward grace period.
++ * The CPU is becoming about to either idle or enter the guest. In any of
++ * these cases, it can't have any outstanding read side critical sections
++ * so this is one step toward the end of the grace period.
+  */
+-void rcu_idle_enter(unsigned int cpu)
++void rcu_quiet_enter(void)
+ {
++    unsigned int cpu = smp_processor_id();
++
+     ASSERT(!cpumask_test_cpu(cpu, &rcu_ctrlblk.ignore_cpumask));
+     cpumask_set_cpu(cpu, &rcu_ctrlblk.ignore_cpumask);
+     /*
+@@ -657,12 +668,15 @@ void rcu_idle_enter(unsigned int cpu)
+      * Se the comment before cpumask_andnot() in  rcu_start_batch().
+      */
+     smp_mb();
+-    cb_timer_start();
++
++    cb_timer_start(cpu);
+ }
+ 
+-void rcu_idle_exit(unsigned int cpu)
++void rcu_quiet_exit(void)
+ {
+-    cb_timer_stop();
++    unsigned int cpu = smp_processor_id();
++
++    cb_timer_stop(cpu);
+     ASSERT(cpumask_test_cpu(cpu, &rcu_ctrlblk.ignore_cpumask));
+     cpumask_clear_cpu(cpu, &rcu_ctrlblk.ignore_cpumask);
+ }
+diff --git a/xen/common/schedule.c b/xen/common/schedule.c
+index c2c0030859..28b3cce251 100644
+--- a/xen/common/schedule.c
++++ b/xen/common/schedule.c
+@@ -3076,18 +3076,6 @@ void schedule_dump(struct cpupool *c)
+     rcu_read_unlock(&sched_res_rculock);
+ }
+ 
+-void sched_tick_suspend(void)
+-{
+-    rcu_idle_enter(smp_processor_id());
+-    rcu_idle_timer_start();
+-}
+-
+-void sched_tick_resume(void)
+-{
+-    rcu_idle_timer_stop();
+-    rcu_idle_exit(smp_processor_id());
+-}
+-
+ void wait(void)
+ {
+     schedule();
+diff --git a/xen/include/xen/rcupdate.h b/xen/include/xen/rcupdate.h
+index 6dc33e4448..842e2f1e49 100644
+--- a/xen/include/xen/rcupdate.h
++++ b/xen/include/xen/rcupdate.h
+@@ -147,8 +147,8 @@ void call_rcu(struct rcu_head *head,
+ 
+ int rcu_barrier(void);
+ 
+-void rcu_idle_enter(unsigned int cpu);
+-void rcu_idle_exit(unsigned int cpu);
++void rcu_quiet_enter(void);
++void rcu_quiet_exit(void);
+ 
+ void rcu_idle_timer_start(void);
+ void rcu_idle_timer_stop(void);
+diff --git a/xen/include/xen/sched.h b/xen/include/xen/sched.h
+index 9347da2192..6bd989c956 100644
+--- a/xen/include/xen/sched.h
++++ b/xen/include/xen/sched.h
+@@ -689,8 +689,6 @@ int sched_move_domain(struct domain *d, struct cpupool *c);
+ long sched_adjust(struct domain *, struct xen_domctl_scheduler_op *);
+ long sched_adjust_global(struct xen_sysctl_scheduler_op *);
+ int  sched_id(void);
+-void sched_tick_suspend(void);
+-void sched_tick_resume(void);
+ void vcpu_wake(struct vcpu *v);
+ long vcpu_yield(void);
+ void vcpu_sleep_nosync(struct vcpu *v);
+-- 
+2.25.1
+
