@@ -62,6 +62,11 @@
 	xen,passthrough;
 };
 
+&ttc1 {
+	status = "okay";
+	xen,passthrough;
+};
+
 &uart0 {
 	xen,passthrough;
 };

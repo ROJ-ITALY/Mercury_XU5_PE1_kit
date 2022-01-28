@@ -15,9 +15,9 @@ SRC_URI = " file://libmetal_amp_demo_ipi_server.elf \
 			file://libmetal_amp_demo_ipi_client.bin \
 			file://libmetal_amp_demo_shmem_client.bin \
 			file://libmetal_amp_demo_throughput_client.bin \
-			file://libmetal_amp_demo_ipi_linux_client.elf \
-			file://libmetal_amp_demo_shmem_linux_client.elf \
-			file://libmetal_amp_demo_throughput_linux_client.elf \
+			file://libmetal_amp_demo_linux_ipi_client.elf \
+			file://libmetal_amp_demo_linux_shmem_client.elf \
+			file://libmetal_amp_demo_linux_throughput_client.elf \
 			file://libmetal_amp_demo_client.cfg \
 		  "
 S = "${WORKDIR}"
@@ -39,9 +39,9 @@ do_install() {
 			install -m 0644 ${S}/libmetal_amp_demo_client.cfg ${D}${sysconfdir}/xen/libmetal_amp_demo_client.cfg
 		else
 			install -d ${D}${bindir}
-			install -m 0755 ${S}/libmetal_amp_demo_ipi_linux_client.elf ${D}${bindir}/libmetal_amp_demo_ipi_linux_client.elf
-			install -m 0755 ${S}/libmetal_amp_demo_shmem_linux_client.elf ${D}${bindir}/libmetal_amp_demo_shmem_linux_client.elf
-			install -m 0755 ${S}/libmetal_amp_demo_throughput_linux_client.elf ${D}${bindir}/libmetal_amp_demo_throughput_linux_client.elf
+			install -m 0755 ${S}/libmetal_amp_demo_linux_ipi_client.elf ${D}${bindir}/libmetal_amp_demo_linux_ipi_client.elf
+			install -m 0755 ${S}/libmetal_amp_demo_linux_shmem_client.elf ${D}${bindir}/libmetal_amp_demo_linux_shmem_client.elf
+			install -m 0755 ${S}/libmetal_amp_demo_linux_throughput_client.elf ${D}${bindir}/libmetal_amp_demo_linux_throughput_client.elf
 		fi
 }
 
