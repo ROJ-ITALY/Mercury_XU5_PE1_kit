@@ -35,7 +35,7 @@
 };
 
 &gem1 {
-	status = "okay";
+	status = "disabled";
 	/delete-property/ local-mac-address;
 	phy-mode = "gmii-id";
 	phy-handle = <&phy1>;
