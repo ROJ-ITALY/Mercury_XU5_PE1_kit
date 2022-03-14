@@ -19,6 +19,7 @@
 		shm0: shm@0 {
 			compatible = "shm_uio";
 			reg = <0x0 0x3ed80000 0x0 0x1000000>;
+			xen,passthrough;
 		};
 
 		/* Define IPI Ch7 for Libmetal AMP demo*/
@@ -27,6 +28,7 @@
 			reg = <0x0 0xff340000 0x0 0x1000>;
 			interrupt-parent = <&gic>;
 			interrupts = <0 29 4>;
+			xen,passthrough;
 		};
 	};
    
@@ -53,10 +55,31 @@
             };
         };
     };
+
+	sram@ff5e0000 {
+		compatible = "mmio-sram";
+		reg = <0x0 0xff5e0000 0x0 0x1000>;
+		xen,passthrough;
+	};
+
 };
 
 &ttc0 {
 	status = "okay";
+	xen,passthrough;
+};
+
+&ttc1 {
+	status = "okay";
+	xen,passthrough;
+};
+
+&uart0 {
+	xen,passthrough;
+};
+
+&gem1 {
+	xen,passthrough;
 };
 
 #include "zynqmp_enclustra_common.dtsi"
