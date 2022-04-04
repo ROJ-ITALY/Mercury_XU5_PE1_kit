@@ -31,7 +31,11 @@ SRC_URI = " file://libmetal_amp_demo_ipi_server.elf \
 			file://libmetal_amp_demo_rtos_shmem_client.bin \
 			file://libmetal_amp_demo_rtos_throughput_client.bin \
 			file://libmetal_amp_demo_rtos_client.cfg \
+			\
+			file://xemacps_example_intr_dma_1.bin \
+			file://test_xen_eth1_dma.cfg \
 		  "
+
 S = "${WORKDIR}"
 INSANE_SKIP_${PN} = "arch"
 
@@ -53,6 +57,9 @@ do_install() {
 			install -m 0644 ${S}/libmetal_amp_demo_ipi_client.bin ${D}/boot/libmetal_amp_demo_ipi_client.bin
 			install -m 0644 ${S}/libmetal_amp_demo_shmem_client.bin ${D}/boot/libmetal_amp_demo_shmem_client.bin
 			install -m 0644 ${S}/libmetal_amp_demo_throughput_client.bin ${D}/boot/libmetal_amp_demo_throughput_client.bin
+
+			install -m 0644 ${S}/xemacps_example_intr_dma_1.bin ${D}/boot/xemacps_example_intr_dma_1.bin		
+
 			# FreeRTOS client
 			install -m 0644 ${S}/libmetal_amp_demo_rtos_ipi_client.bin ${D}/boot/libmetal_amp_demo_rtos_ipi_client.bin
 			install -m 0644 ${S}/libmetal_amp_demo_rtos_shmem_client.bin ${D}/boot/libmetal_amp_demo_rtos_shmem_client.bin
@@ -61,6 +68,9 @@ do_install() {
 			install -d ${D}${sysconfdir}/xen
 			install -m 0644 ${S}/libmetal_amp_demo_client.cfg ${D}${sysconfdir}/xen/libmetal_amp_demo_client.cfg
 			install -m 0644 ${S}/libmetal_amp_demo_rtos_client.cfg ${D}${sysconfdir}/xen/libmetal_amp_demo_rtos_client.cfg
+
+			install -m 0644 ${S}/test_xen_eth1_dma.cfg ${D}${sysconfdir}/xen/test_xen_eth1_dma.cfg
+
 		else
 			install -d ${D}${bindir}
 			install -m 0755 ${S}/libmetal_amp_demo_linux_ipi_client.elf ${D}${bindir}/libmetal_amp_demo_linux_ipi_client.elf
