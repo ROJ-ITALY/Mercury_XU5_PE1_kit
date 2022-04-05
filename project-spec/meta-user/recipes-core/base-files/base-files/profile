@@ -35,6 +35,3 @@ umask 022
 alias ll='ls -l'
 alias la='ls -a'
 alias ls='ls --color=auto'
-
-# Change window size console /dev/hvc0
-stty -F /dev/hvc0 cols 318 rows 78

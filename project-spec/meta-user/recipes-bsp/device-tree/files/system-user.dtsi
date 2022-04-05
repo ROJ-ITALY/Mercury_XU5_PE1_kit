@@ -1,55 +1,6 @@
 /include/ "system-conf.dtsi"
-/include/ "xen.dtsi"
 / {
 	model = "Enclustra ME-XU5-2EG-1I-D11E SOM";
-
-    reserved-memory {
-        #address-cells = <2>;
-        #size-cells = <2>;
-        ranges;
-
-		/* Define shared memory 16MB for Libmetal AMP demo*/
-        shm_0_reserved: xen-shmem@3ed80000 {
-            no-map;
-            reg = <0x0 0x3ed80000 0x0 0x1000000>;
-        };
-    };
-
-	amba {
-
-		/* Define shared memory 16MB for Libmetal AMP demo*/
-		shm0: shm@0 {
-			compatible = "shm_uio";
-			reg = <0x0 0x3ed80000 0x0 0x1000000>;
-		};
-
-		/* Define IPI Ch7 for Libmetal AMP demo client*/
-		ipi0: ipi@0 {
-			compatible = "ipi_uio";
-			reg = <0x0 0xff340000 0x0 0x1000>;
-			interrupt-parent = <&gic>;
-			interrupts = <0 29 4>;
-		};
-
-		/* Define IPI Ch8 for Libmetal AMP demo server*/
-		ipi1: ipi@1 {
-			compatible = "ipi_uio";
-			reg = <0x0 0xff350000 0x0 0x1000>;
-			interrupt-parent = <&gic>;
-			interrupts = <0 30 4>;
-			xen,passthrough;
-		};
-		
-	};
-
-};
-
-&ttc0 {
-	status = "okay";
-};
-
-&uart0 {
-	xen,passthrough;
 };
 
 #include "zynqmp_enclustra_common.dtsi"

@@ -4215,7 +4215,7 @@ CONFIG_packagegroup-petalinux-openamp=y
 #
 # packagegroup-petalinux-xen 
 #
-CONFIG_packagegroup-petalinux-xen=y
+# CONFIG_packagegroup-petalinux-xen is not set
 # CONFIG_packagegroup-petalinux-xen-dev is not set
 # CONFIG_packagegroup-petalinux-xen-dbg is not set
 
@@ -4240,7 +4240,6 @@ CONFIG_imagefeature-debug-tweaks=y
 # apps 
 #
 # CONFIG_gpio-demo is not set
-CONFIG_libmetal-custom-demos=y
 # CONFIG_peekpoke is not set
 
 #
